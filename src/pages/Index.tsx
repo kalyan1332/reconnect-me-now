@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { ItemCard } from "@/components/ItemCard";
 import { ReportItemDialog } from "@/components/ReportItemDialog";
+import { supabase } from "@/integrations/supabase/client";
 import { Search, Package, Users, Shield } from "lucide-react";
 import heroImage from "@/assets/hero-lost-found.jpg";
 import itemBackpack from "@/assets/item-backpack.jpg";
@@ -9,47 +10,102 @@ import itemPhone from "@/assets/item-phone.jpg";
 import itemKeys from "@/assets/item-keys.jpg";
 import itemWallet from "@/assets/item-wallet.jpg";
 
+interface Item {
+  id: string;
+  title: string;
+  category: string;
+  location: string;
+  date: string;
+  status: "lost" | "found";
+  image_url: string | null;
+}
+
 const Index = () => {
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportType, setReportType] = useState<"lost" | "found">("lost");
-  const recentItems = [
+  const [items, setItems] = useState<Item[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fetch items from database
+  useEffect(() => {
+    const fetchItems = async () => {
+      const { data, error } = await supabase
+        .from('items')
+        .select('id, title, category, location, date, status, image_url')
+        .order('created_at', { ascending: false })
+        .limit(8);
+
+      if (error) {
+        console.error('Error fetching items:', error);
+      } else {
+        setItems((data || []) as Item[]);
+      }
+      setLoading(false);
+    };
+
+    fetchItems();
+
+    // Subscribe to realtime changes
+    const channel = supabase
+      .channel('items-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'items'
+        },
+        () => {
+          fetchItems();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+  // Fallback items when database is empty
+  const fallbackItems = [
     {
-      id: 1,
-      image: itemBackpack,
+      id: "1",
       title: "Blue Backpack",
       category: "Bag & Luggage",
       location: "Central Park, NYC",
-      date: "2 hours ago",
+      date: "2024-03-15",
       status: "found" as const,
+      image_url: itemBackpack,
     },
     {
-      id: 2,
-      image: itemPhone,
+      id: "2",
       title: "iPhone 15 Pro",
       category: "Electronics",
       location: "Starbucks, 5th Ave",
-      date: "5 hours ago",
+      date: "2024-03-14",
       status: "lost" as const,
+      image_url: itemPhone,
     },
     {
-      id: 3,
-      image: itemKeys,
+      id: "3",
       title: "House Keys",
       category: "Keys & Accessories",
       location: "Subway Station",
-      date: "1 day ago",
+      date: "2024-03-13",
       status: "found" as const,
+      image_url: itemKeys,
     },
     {
-      id: 4,
-      image: itemWallet,
+      id: "4",
       title: "Brown Leather Wallet",
       category: "Wallet & Cards",
       location: "Coffee Shop",
-      date: "2 days ago",
+      date: "2024-03-12",
       status: "lost" as const,
+      image_url: itemWallet,
     },
   ];
+
+  const displayItems = items.length > 0 ? items : fallbackItems;
 
   const features = [
     {
@@ -166,11 +222,29 @@ const Index = () => {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
-            {recentItems.map((item) => (
-              <ItemCard key={item.id} {...item} />
-            ))}
-          </div>
+          {loading ? (
+            <div className="text-center py-12">
+              <p className="text-muted-foreground">Loading items...</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
+              {displayItems.map((item) => (
+                <ItemCard 
+                  key={item.id}
+                  image={item.image_url || itemBackpack}
+                  title={item.title}
+                  category={item.category}
+                  location={item.location}
+                  date={new Date(item.date).toLocaleDateString('en-US', { 
+                    year: 'numeric', 
+                    month: 'long', 
+                    day: 'numeric' 
+                  })}
+                  status={item.status}
+                />
+              ))}
+            </div>
+          )}
 
           <div className="text-center mt-12">
             <Button size="lg" variant="outline" className="font-semibold">

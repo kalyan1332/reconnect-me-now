@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Upload, MapPin, Calendar } from "lucide-react";
 import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ReportItemDialogProps {
   open: boolean;
@@ -22,7 +23,10 @@ export const ReportItemDialog = ({ open, onOpenChange, type }: ReportItemDialogP
     date: "",
     description: "",
     contactInfo: "",
+    finderName: "",
   });
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
 
   const categories = [
     "Bag & Luggage",
@@ -36,34 +40,87 @@ export const ReportItemDialog = ({ open, onOpenChange, type }: ReportItemDialogP
     "Other",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
-    if (!formData.title || !formData.category || !formData.location || !formData.date) {
+    if (!formData.title || !formData.category || !formData.location || !formData.date || !formData.finderName) {
       toast.error("Please fill in all required fields");
       return;
     }
 
-    // Here you would typically send the data to a backend
-    toast.success(
-      `${type === "lost" ? "Lost" : "Found"} item reported successfully!`,
-      {
-        description: "Your report will be visible to the community shortly.",
+    setUploading(true);
+
+    try {
+      let imageUrl = null;
+
+      // Upload image if provided
+      if (imageFile) {
+        const fileExt = imageFile.name.split('.').pop();
+        const fileName = `${Math.random()}.${fileExt}`;
+        const filePath = `${fileName}`;
+
+        const { error: uploadError } = await supabase.storage
+          .from('item-images')
+          .upload(filePath, imageFile);
+
+        if (uploadError) {
+          throw uploadError;
+        }
+
+        // Get public URL
+        const { data: { publicUrl } } = supabase.storage
+          .from('item-images')
+          .getPublicUrl(filePath);
+
+        imageUrl = publicUrl;
       }
-    );
-    
-    // Reset form
-    setFormData({
-      title: "",
-      category: "",
-      location: "",
-      date: "",
-      description: "",
-      contactInfo: "",
-    });
-    
-    onOpenChange(false);
+
+      // Insert item into database
+      const { error: insertError } = await supabase
+        .from('items')
+        .insert({
+          title: formData.title,
+          category: formData.category,
+          location: formData.location,
+          date: formData.date,
+          description: formData.description,
+          contact_info: formData.contactInfo,
+          finder_name: formData.finderName,
+          status: type,
+          image_url: imageUrl,
+        });
+
+      if (insertError) {
+        throw insertError;
+      }
+
+      toast.success(
+        `${type === "lost" ? "Lost" : "Found"} item reported successfully!`,
+        {
+          description: "Your report is now visible to the community.",
+        }
+      );
+      
+      // Reset form
+      setFormData({
+        title: "",
+        category: "",
+        location: "",
+        date: "",
+        description: "",
+        contactInfo: "",
+        finderName: "",
+      });
+      setImageFile(null);
+      
+      onOpenChange(false);
+    } catch (error) {
+      console.error('Error submitting report:', error);
+      toast.error("Failed to submit report. Please try again.");
+    } finally {
+      setUploading(false);
+    }
   };
 
   return (
@@ -80,13 +137,22 @@ export const ReportItemDialog = ({ open, onOpenChange, type }: ReportItemDialogP
           <div className="space-y-2">
             <Label>Item Photo</Label>
             <div className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-primary transition-smooth cursor-pointer bg-muted/30">
-              <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground mb-1">
-                Click to upload or drag and drop
-              </p>
-              <p className="text-xs text-muted-foreground">
-                PNG, JPG up to 10MB
-              </p>
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                className="hidden"
+                id="image-upload"
+              />
+              <label htmlFor="image-upload" className="cursor-pointer">
+                <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground mb-1">
+                  {imageFile ? imageFile.name : "Click to upload or drag and drop"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  PNG, JPG up to 10MB
+                </p>
+              </label>
             </div>
           </div>
 
@@ -176,6 +242,20 @@ export const ReportItemDialog = ({ open, onOpenChange, type }: ReportItemDialogP
             />
           </div>
 
+          {/* Finder/Reporter Name */}
+          <div className="space-y-2">
+            <Label htmlFor="finderName">
+              Your Name <span className="text-destructive">*</span>
+            </Label>
+            <Input
+              id="finderName"
+              placeholder="e.g., Chandrashakar or Harsh"
+              value={formData.finderName}
+              onChange={(e) => setFormData({ ...formData, finderName: e.target.value })}
+              required
+            />
+          </div>
+
           {/* Contact Info */}
           <div className="space-y-2">
             <Label htmlFor="contact">
@@ -207,8 +287,9 @@ export const ReportItemDialog = ({ open, onOpenChange, type }: ReportItemDialogP
             <Button
               type="submit"
               className="flex-1 bg-primary hover:bg-primary-hover"
+              disabled={uploading}
             >
-              Submit Report
+              {uploading ? "Submitting..." : "Submit Report"}
             </Button>
           </div>
         </form>
