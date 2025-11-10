@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ItemCard } from "@/components/ItemCard";
+import { ReportItemDialog } from "@/components/ReportItemDialog";
 import { Search, Package, Users, Shield } from "lucide-react";
 import heroImage from "@/assets/hero-lost-found.jpg";
 import itemBackpack from "@/assets/item-backpack.jpg";
@@ -8,6 +10,8 @@ import itemKeys from "@/assets/item-keys.jpg";
 import itemWallet from "@/assets/item-wallet.jpg";
 
 const Index = () => {
+  const [reportDialogOpen, setReportDialogOpen] = useState(false);
+  const [reportType, setReportType] = useState<"lost" | "found">("lost");
   const recentItems = [
     {
       id: 1,
@@ -95,12 +99,20 @@ const Index = () => {
                 size="lg" 
                 variant="secondary"
                 className="text-base font-semibold shadow-soft hover:shadow-card transition-smooth"
+                onClick={() => {
+                  setReportType("lost");
+                  setReportDialogOpen(true);
+                }}
               >
                 Report Lost Item
               </Button>
               <Button 
                 size="lg"
                 className="text-base font-semibold bg-accent hover:bg-accent-hover text-accent-foreground shadow-soft transition-smooth"
+                onClick={() => {
+                  setReportType("found");
+                  setReportDialogOpen(true);
+                }}
               >
                 Report Found Item
               </Button>
@@ -179,7 +191,14 @@ const Index = () => {
               Join our community and help reunite people with their belongings today
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-              <Button size="lg" className="bg-primary hover:bg-primary-hover text-primary-foreground font-semibold">
+              <Button 
+                size="lg" 
+                className="bg-primary hover:bg-primary-hover text-primary-foreground font-semibold"
+                onClick={() => {
+                  setReportType("lost");
+                  setReportDialogOpen(true);
+                }}
+              >
                 Get Started
               </Button>
               <Button size="lg" variant="outline" className="font-semibold">
@@ -204,6 +223,13 @@ const Index = () => {
           </div>
         </div>
       </footer>
+
+      {/* Report Dialog */}
+      <ReportItemDialog
+        open={reportDialogOpen}
+        onOpenChange={setReportDialogOpen}
+        type={reportType}
+      />
     </div>
   );
 };
