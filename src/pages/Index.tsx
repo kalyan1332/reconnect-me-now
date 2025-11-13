@@ -316,9 +316,70 @@ const Index = () => {
               >
                 Get Started
               </Button>
-              <Button size="lg" variant="outline" className="font-semibold">
+              <Button 
+                size="lg" 
+                variant="outline" 
+                className="font-semibold"
+                onClick={() => document.getElementById('about')?.scrollIntoView({ behavior: 'smooth' })}
+              >
                 Learn More
               </Button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* About Section */}
+      <section id="about" className="py-20 bg-background">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto space-y-12">
+            <div className="text-center space-y-4">
+              <h2 className="text-3xl md:text-4xl font-bold text-foreground">
+                About Lost & Found
+              </h2>
+              <p className="text-lg text-muted-foreground">
+                A community-driven platform connecting people with their lost belongings
+              </p>
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-8">
+              <div className="space-y-4 p-6 rounded-lg bg-card border border-border">
+                <h3 className="text-xl font-semibold text-foreground">Our Mission</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  We believe that every lost item has a story and every reunion brings hope. 
+                  Our platform bridges the gap between those who have lost something precious 
+                  and those who have found it, creating a trustworthy community where people 
+                  help each other.
+                </p>
+              </div>
+
+              <div className="space-y-4 p-6 rounded-lg bg-card border border-border">
+                <h3 className="text-xl font-semibold text-foreground">How We Help</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Our platform provides a simple, secure way to report and search for lost 
+                  items. With real-time updates, location-based search, and a community of 
+                  helpful members, we make the process of recovering lost belongings easier 
+                  than ever before.
+                </p>
+              </div>
+
+              <div className="space-y-4 p-6 rounded-lg bg-card border border-border">
+                <h3 className="text-xl font-semibold text-foreground">Privacy & Security</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Your privacy matters to us. All reports are securely stored, and contact 
+                  information is only shared when you choose to connect with someone. We use 
+                  industry-standard security practices to protect your data.
+                </p>
+              </div>
+
+              <div className="space-y-4 p-6 rounded-lg bg-card border border-border">
+                <h3 className="text-xl font-semibold text-foreground">Join the Community</h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  Whether you've lost something valuable or found an item that doesn't belong 
+                  to you, our platform makes it easy to do the right thing. Join thousands of 
+                  users who are helping reunite people with their belongings every day.
+                </p>
+              </div>
             </div>
           </div>
         </div>
