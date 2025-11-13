@@ -1,9 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ItemCard } from "@/components/ItemCard";
 import { ReportItemDialog } from "@/components/ReportItemDialog";
 import { supabase } from "@/integrations/supabase/client";
-import { Search, Package, Users, Shield } from "lucide-react";
+import type { Session } from "@supabase/supabase-js";
+import { Search, Package, Users, Shield, LogOut } from "lucide-react";
 import heroImage from "@/assets/hero-lost-found.jpg";
 import itemBackpack from "@/assets/item-backpack.jpg";
 import itemPhone from "@/assets/item-phone.jpg";
@@ -25,9 +27,28 @@ const Index = () => {
   const [reportType, setReportType] = useState<"lost" | "found">("lost");
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
+  const [session, setSession] = useState<Session | null>(null);
+  const navigate = useNavigate();
 
   // Fetch items from database
   useEffect(() => {
+    // Check authentication
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setSession(session);
+      }
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!session) {
+        navigate("/auth");
+      } else {
+        setSession(session);
+      }
+    });
+
     const fetchItems = async () => {
       const { data, error } = await supabase
         .from('items')
@@ -62,9 +83,10 @@ const Index = () => {
       .subscribe();
 
     return () => {
+      subscription.unsubscribe();
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [navigate]);
   // Fallback items when database is empty
   const fallbackItems = [
     {
@@ -107,6 +129,15 @@ const Index = () => {
 
   const displayItems = items.length > 0 ? items : fallbackItems;
 
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
+
+  if (!session) {
+    return null;
+  }
+
   const features = [
     {
       icon: Search,
@@ -132,6 +163,16 @@ const Index = () => {
 
   return (
     <div className="min-h-screen">
+      {/* Navigation */}
+      <nav className="bg-card shadow-sm sticky top-0 z-50 border-b border-border">
+        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-primary">Lost & Found</h1>
+          <Button variant="outline" size="icon" onClick={handleSignOut} title="Sign Out">
+            <LogOut className="h-4 w-4" />
+          </Button>
+        </div>
+      </nav>
+
       {/* Hero Section */}
       <section className="relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-hero opacity-90" />
