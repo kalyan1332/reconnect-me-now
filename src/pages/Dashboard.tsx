@@ -79,7 +79,7 @@ const Dashboard = () => {
         .from('profiles')
         .select('contact_number')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
       // Fetch notifications
       const { data: notifs } = await supabase
@@ -94,23 +94,18 @@ const Dashboard = () => {
         setUnreadCount(notifs.filter(n => !n.read).length);
       }
 
-      // Fetch matches for items the user has reported
+      // Fetch user's items directly using user_id
       const { data: items } = await supabase
         .from('items')
         .select('id, title, category, location, date, status, image_url, created_at, contact_info')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
 
       if (items) {
-        // Filter items based on user's contact info from profile
-        const userItems = items.filter(item => {
-          // This is a simple check - in production you'd want to link items to user_id
-          return item.contact_info && profile?.contact_number && 
-                 item.contact_info.includes(profile.contact_number);
-        });
-        setMyItems(userItems as Item[]);
+        setMyItems(items as Item[]);
 
         // Fetch matches for user's items
-        const itemIds = userItems.map(i => i.id);
+        const itemIds = items.map(i => i.id);
         if (itemIds.length > 0) {
           const { data: matchData } = await supabase
             .from('matches')

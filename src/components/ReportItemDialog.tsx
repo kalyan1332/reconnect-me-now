@@ -132,6 +132,13 @@ export const ReportItemDialog = ({ open, onOpenChange, type }: ReportItemDialogP
       }
 
       // Insert item into database
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+
+      if (!userId) {
+        throw new Error("You must be logged in to report an item");
+      }
+
       const { error: insertError } = await supabase
         .from('items')
         .insert({
@@ -144,6 +151,7 @@ export const ReportItemDialog = ({ open, onOpenChange, type }: ReportItemDialogP
           finder_name: formData.finderName,
           status: type,
           image_url: imageUrl,
+          user_id: userId,
         });
 
       if (insertError) {
