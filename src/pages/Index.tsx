@@ -3,9 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { ItemCard } from "@/components/ItemCard";
 import { ReportItemDialog } from "@/components/ReportItemDialog";
+import { ItemDetailsDialog } from "@/components/ItemDetailsDialog";
+import { SearchFilters, type SearchFilters as FilterType } from "@/components/SearchFilters";
 import { supabase } from "@/integrations/supabase/client";
 import type { Session } from "@supabase/supabase-js";
-import { Search, Package, Users, Shield, LogOut } from "lucide-react";
+import { Search, Package, Users, Shield, LogOut, LayoutDashboard, TrendingUp } from "lucide-react";
+import { NotificationBell } from "@/components/NotificationBell";
 import heroImage from "@/assets/hero-lost-found.jpg";
 import itemBackpack from "@/assets/item-backpack.jpg";
 import itemPhone from "@/assets/item-phone.jpg";
@@ -20,14 +23,21 @@ interface Item {
   date: string;
   status: "lost" | "found";
   image_url: string | null;
+  description: string | null;
+  finder_name: string;
+  contact_info: string;
 }
 
 const Index = () => {
   const [reportDialogOpen, setReportDialogOpen] = useState(false);
   const [reportType, setReportType] = useState<"lost" | "found">("lost");
   const [items, setItems] = useState<Item[]>([]);
+  const [filteredItems, setFilteredItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [session, setSession] = useState<Session | null>(null);
+  const [selectedItem, setSelectedItem] = useState<Item | null>(null);
+  const [itemDetailsOpen, setItemDetailsOpen] = useState(false);
+  const [stats, setStats] = useState({ total: 0, lost: 0, found: 0, matches: 0 });
   const navigate = useNavigate();
 
   // Fetch items from database
@@ -52,19 +62,43 @@ const Index = () => {
     const fetchItems = async () => {
       const { data, error } = await supabase
         .from('items')
-        .select('id, title, category, location, date, status, image_url')
-        .order('created_at', { ascending: false })
-        .limit(8);
+        .select('*')
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching items:', error);
       } else {
-        setItems((data || []) as Item[]);
+        const itemsData = (data || []) as Item[];
+        setItems(itemsData);
+        setFilteredItems(itemsData);
+        
+        // Calculate stats
+        const lostCount = itemsData.filter(i => i.status === 'lost').length;
+        const foundCount = itemsData.filter(i => i.status === 'found').length;
+        setStats({
+          total: itemsData.length,
+          lost: lostCount,
+          found: foundCount,
+          matches: 0, // Will be updated with real match count
+        });
       }
       setLoading(false);
     };
 
     fetchItems();
+    
+    // Fetch matches count
+    const fetchMatchesCount = async () => {
+      const { count } = await supabase
+        .from('matches')
+        .select('*', { count: 'exact', head: true });
+      
+      if (count !== null) {
+        setStats(prev => ({ ...prev, matches: count }));
+      }
+    };
+    
+    fetchMatchesCount();
 
     // Subscribe to realtime changes
     const channel = supabase
@@ -88,7 +122,7 @@ const Index = () => {
     };
   }, [navigate]);
   // Fallback items when database is empty
-  const fallbackItems = [
+  const fallbackItems: Item[] = [
     {
       id: "1",
       title: "Blue Backpack",
@@ -97,6 +131,9 @@ const Index = () => {
       date: "2024-03-15",
       status: "found" as const,
       image_url: itemBackpack,
+      description: "Navy blue backpack with laptop compartment",
+      finder_name: "John Doe",
+      contact_info: "john@example.com",
     },
     {
       id: "2",
@@ -106,6 +143,9 @@ const Index = () => {
       date: "2024-03-14",
       status: "lost" as const,
       image_url: itemPhone,
+      description: "Black iPhone 15 Pro with blue case",
+      finder_name: "Jane Smith",
+      contact_info: "jane@example.com",
     },
     {
       id: "3",
@@ -115,6 +155,9 @@ const Index = () => {
       date: "2024-03-13",
       status: "found" as const,
       image_url: itemKeys,
+      description: "Set of keys with blue keychain",
+      finder_name: "Mike Johnson",
+      contact_info: "mike@example.com",
     },
     {
       id: "4",
@@ -124,10 +167,45 @@ const Index = () => {
       date: "2024-03-12",
       status: "lost" as const,
       image_url: itemWallet,
+      description: "Brown leather wallet with cards",
+      finder_name: "Sarah Wilson",
+      contact_info: "sarah@example.com",
     },
   ];
 
-  const displayItems = items.length > 0 ? items : fallbackItems;
+  const displayItems = filteredItems.length > 0 ? filteredItems.slice(0, 8) : fallbackItems;
+
+  const handleSearch = (filters: FilterType) => {
+    let filtered = [...items];
+    
+    if (filters.query) {
+      filtered = filtered.filter(item =>
+        item.title.toLowerCase().includes(filters.query.toLowerCase()) ||
+        item.description?.toLowerCase().includes(filters.query.toLowerCase())
+      );
+    }
+    
+    if (filters.category !== "all") {
+      filtered = filtered.filter(item => item.category === filters.category);
+    }
+    
+    if (filters.status !== "all") {
+      filtered = filtered.filter(item => item.status === filters.status);
+    }
+    
+    if (filters.location) {
+      filtered = filtered.filter(item =>
+        item.location.toLowerCase().includes(filters.location.toLowerCase())
+      );
+    }
+    
+    setFilteredItems(filtered);
+  };
+
+  const handleItemClick = (item: Item) => {
+    setSelectedItem(item);
+    setItemDetailsOpen(true);
+  };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -167,9 +245,15 @@ const Index = () => {
       <nav className="bg-card shadow-sm sticky top-0 z-50 border-b border-border">
         <div className="container mx-auto px-4 py-4 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-primary">Lost & Found</h1>
-          <Button variant="outline" size="icon" onClick={handleSignOut} title="Sign Out">
-            <LogOut className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <NotificationBell userId={session?.user.id} />
+            <Button variant="ghost" size="icon" onClick={() => navigate("/dashboard")} title="Dashboard">
+              <LayoutDashboard className="h-4 w-4" />
+            </Button>
+            <Button variant="outline" size="icon" onClick={handleSignOut} title="Sign Out">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </nav>
 
@@ -218,6 +302,41 @@ const Index = () => {
         </div>
       </section>
 
+      {/* Stats Section */}
+      <section className="py-12 bg-gradient-to-b from-background to-muted/30">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="text-center p-6 bg-card rounded-lg border border-border shadow-sm">
+              <TrendingUp className="h-8 w-8 text-primary mx-auto mb-2" />
+              <p className="text-3xl font-bold text-foreground">{stats.total}</p>
+              <p className="text-sm text-muted-foreground">Total Items</p>
+            </div>
+            <div className="text-center p-6 bg-card rounded-lg border border-border shadow-sm">
+              <Package className="h-8 w-8 text-destructive mx-auto mb-2" />
+              <p className="text-3xl font-bold text-foreground">{stats.lost}</p>
+              <p className="text-sm text-muted-foreground">Lost Items</p>
+            </div>
+            <div className="text-center p-6 bg-card rounded-lg border border-border shadow-sm">
+              <Package className="h-8 w-8 text-success mx-auto mb-2" />
+              <p className="text-3xl font-bold text-foreground">{stats.found}</p>
+              <p className="text-sm text-muted-foreground">Found Items</p>
+            </div>
+            <div className="text-center p-6 bg-card rounded-lg border border-border shadow-sm">
+              <Search className="h-8 w-8 text-accent mx-auto mb-2" />
+              <p className="text-3xl font-bold text-foreground">{stats.matches}</p>
+              <p className="text-sm text-muted-foreground">Matches Made</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Search & Filter Section */}
+      <section className="py-12 bg-muted/30">
+        <div className="container mx-auto px-4">
+          <SearchFilters onSearch={handleSearch} />
+        </div>
+      </section>
+
       {/* Features Section */}
       <section className="py-20 bg-background">
         <div className="container mx-auto px-4">
@@ -226,7 +345,7 @@ const Index = () => {
               How It Works
             </h2>
             <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-              Our platform makes it simple to help others find their lost belongings
+              Our AI-powered platform makes it simple to reunite items with their owners
             </p>
           </div>
 
@@ -270,19 +389,20 @@ const Index = () => {
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto">
               {displayItems.map((item) => (
-                <ItemCard 
-                  key={item.id}
-                  image={item.image_url || itemBackpack}
-                  title={item.title}
-                  category={item.category}
-                  location={item.location}
-                  date={new Date(item.date).toLocaleDateString('en-US', { 
-                    year: 'numeric', 
-                    month: 'long', 
-                    day: 'numeric' 
-                  })}
-                  status={item.status}
-                />
+                <div key={item.id} onClick={() => handleItemClick(item)}>
+                  <ItemCard 
+                    image={item.image_url || itemBackpack}
+                    title={item.title}
+                    category={item.category}
+                    location={item.location}
+                    date={new Date(item.date).toLocaleDateString('en-US', { 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
+                    status={item.status}
+                  />
+                </div>
               ))}
             </div>
           )}
@@ -405,6 +525,14 @@ const Index = () => {
         open={reportDialogOpen}
         onOpenChange={setReportDialogOpen}
         type={reportType}
+      />
+
+      {/* Item Details Dialog */}
+      <ItemDetailsDialog
+        open={itemDetailsOpen}
+        onOpenChange={setItemDetailsOpen}
+        item={selectedItem}
+        currentUserId={session?.user.id}
       />
     </div>
   );
